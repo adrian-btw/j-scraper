@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.python-version
+
+# Distribution / packaging
+.Python
+dist/
+build/
+*.egg-info/
+
+# Logs and database files
+*.log
+*.sqlite3
+
+# System-specific files
+.DS_Store
+Thumbs.db
+
+# Selenium WebDriver binaries
+chromedriver
+
+# Ignore scraped data and processed IDs
+data/scraped_data/
+processed_urls.txt
+
+# Ignore input files and config
+ids.txt
+config.py
