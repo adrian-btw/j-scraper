@@ -7,7 +7,6 @@ from selenium.common.exceptions import (
 )
 
 
-
 class JeopardyGameParser:
     """Parses Jeopardy! game data from a Selenium-loaded page."""
 
@@ -16,23 +15,29 @@ class JeopardyGameParser:
 
     def parse(self) -> dict:
         """Extracts structured data from a Jeopardy! game page."""
-        data = {"game_id": None, "game_date": None, "clues": [], "skipped_clues": []}
+        data = {
+            "game_id": None,
+            "game_date": None,
+            "clues": [],
+            "skipped_clues": [],
+            "_metadata": {"errors": []},
+        }
 
         try:
             data["game_id"], data["game_date"] = self._extract_game_metadata()
+            if data["game_id"] is None or data["game_date"] is None:
+                data["_metadata"]["errors"].append("Missing game metadata.")
 
-            # Extract standard Jeopardy and Double Jeopardy rounds
             for round_id, round_name in {
                 "jeopardy_round": "SJ",
                 "double_jeopardy_round": "DJ",
             }.items():
                 self._extract_main_round_data(round_id, round_name, data)
 
-            # Extract Final Jeopardy separately
             self._extract_final_round_data(data)
 
         except Exception as e:
-            print(f"Failed to extract game data: {e}")
+            data["_metadata"]["errors"].append(f"Unhandled exception in parse: {e}")
 
         return data
 
@@ -42,15 +47,13 @@ class JeopardyGameParser:
             match = re.search(r"Show #(\d+) - (.+)", game_title)
             if match:
                 return int(match.group(1)), match.group(2).strip()
-        except Exception as e:
-            print(f"Error extracting game metadata: {e}")
-
+        except Exception:
+            pass
         return None, None
 
     def _extract_main_round_data(
         self, round_id: str, round_name: str, data: dict
     ) -> None:
-        """Extracts clues from the Jeopardy and Double Jeopardy rounds."""
         try:
             round_element = self.driver.find_element(By.ID, round_id)
             categories = self._extract_categories(round_element)
@@ -64,12 +67,9 @@ class JeopardyGameParser:
                     is_daily_double = self._is_daily_double(clue_element)
                     dollar_val = self._infer_dollar_value(clue_index, round_name)
 
-                    # Click to reveal correct response
                     self._click_clue_value(clue_element)
-
                     correct_response = self._extract_correct_response(clue_element)
 
-                    # Assign category
                     category_index = clue_index % len(categories)
                     category = (
                         categories[category_index]
@@ -98,26 +98,23 @@ class JeopardyGameParser:
                     )
 
         except Exception as e:
-            print(f"Skipping {round_name} due to error: {e}")
+            data["_metadata"]["errors"].append(
+                f"Failed to extract round {round_name}: {e}"
+            )
 
     def _extract_final_round_data(self, data: dict) -> None:
-        """Extracts the Final Jeopardy round."""
         try:
             final_round = self.driver.find_element(By.ID, "final_jeopardy_round")
             category = final_round.find_element(
                 By.CLASS_NAME, "category_name"
             ).text.strip()
-
-            # Extract the Final Jeopardy clue text
             clue_text = final_round.find_element(
                 By.CLASS_NAME, "clue_text"
             ).text.strip()
 
-            # Click the category row to reveal the answer
             category_row = final_round.find_element(By.TAG_NAME, "tr")
             category_row.click()
 
-            # Extract the correct response
             correct_response = final_round.find_element(
                 By.CLASS_NAME, "correct_response"
             ).text.strip()
@@ -134,7 +131,7 @@ class JeopardyGameParser:
             )
 
         except Exception as e:
-            print(f"Skipping Final Jeopardy due to error: {e}")
+            data["_metadata"]["errors"].append(f"Failed to extract Final Jeopardy: {e}")
 
     def _extract_categories(self, round_element) -> list[str]:
         return [
@@ -143,7 +140,6 @@ class JeopardyGameParser:
         ]
 
     def _is_daily_double(self, clue_element) -> bool:
-        """Checks if a clue is a Daily Double."""
         try:
             clue_element.find_element(By.CLASS_NAME, "clue_value_daily_double")
             return True
@@ -151,7 +147,6 @@ class JeopardyGameParser:
             return False
 
     def _click_clue_value(self, clue_element) -> None:
-        """Clicks the appropriate element to reveal the correct response."""
         try:
             try:
                 value_element = clue_element.find_element(By.CLASS_NAME, "clue_value")
@@ -159,13 +154,11 @@ class JeopardyGameParser:
                 value_element = clue_element.find_element(
                     By.CLASS_NAME, "clue_value_daily_double"
                 )
-
             value_element.click()
         except (NoSuchElementException, ElementClickInterceptedException):
-            print("Could not click clue to reveal answer.")
+            pass
 
     def _extract_correct_response(self, clue_element) -> str:
-        """Extracts the correct response from a revealed clue."""
         try:
             return clue_element.find_element(
                 By.CLASS_NAME, "correct_response"
@@ -174,11 +167,9 @@ class JeopardyGameParser:
             return "[Unknown]"
 
     def _infer_dollar_value(self, clue_index: int, round_name: str) -> int:
-        """Infers the clue's dollar value based on its row position."""
-        row = clue_index // 6  # There are 6 columns (categories) per round
-
-        if round_name == "SJ":  # Single Jeopardy! round
+        row = clue_index // 6
+        if round_name == "SJ":
             return [200, 400, 600, 800, 1000][row]
-        elif round_name == "DJ":  # Double Jeopardy! round
+        elif round_name == "DJ":
             return [400, 800, 1200, 1600, 2000][row]
-        return None  # Final Jeopardy! always has None as its value
+        return None

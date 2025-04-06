@@ -80,6 +80,7 @@ class WebScraper:
 
             # Add metadata
             data["_metadata"] = {
+                **data["_metadata"],
                 "id": item_id,
                 "url": url,
                 "timestamp": datetime.now().isoformat(),
