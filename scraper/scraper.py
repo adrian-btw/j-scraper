@@ -1,12 +1,13 @@
 import time
 import config
+import os
 from datetime import datetime
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from scraper.parsers import JeopardyGameParser, JeopardySeasonListParser
-import config
 
 
 class WebScraper:
@@ -48,8 +49,39 @@ class WebScraper:
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
+        # Get the path from ChromeDriverManager and ensure we use the actual chromedriver executable
+        driver_path = ChromeDriverManager().install()
+        
+        # Fix: ChromeDriverManager sometimes returns the wrong file (e.g., THIRD_PARTY_NOTICES.chromedriver)
+        # We need to find the actual chromedriver executable
+        driver_path_obj = Path(driver_path)
+        
+        # If the returned path doesn't point to the actual chromedriver executable
+        if not driver_path_obj.name == 'chromedriver' or 'THIRD_PARTY' in driver_path or 'LICENSE' in driver_path:
+            # Look for chromedriver in the same directory
+            driver_dir = driver_path_obj.parent
+            actual_chromedriver = driver_dir / 'chromedriver'
+            
+            if actual_chromedriver.exists() and actual_chromedriver.is_file():
+                driver_path = str(actual_chromedriver)
+            else:
+                # Search in subdirectories (sometimes it's in a nested folder)
+                for potential_driver in driver_dir.rglob('chromedriver'):
+                    if (potential_driver.is_file() and 
+                        potential_driver.name == 'chromedriver' and
+                        'THIRD_PARTY' not in str(potential_driver) and
+                        'LICENSE' not in str(potential_driver)):
+                        # Ensure it's executable
+                        os.chmod(potential_driver, 0o755)
+                        driver_path = str(potential_driver)
+                        break
+        
+        # Ensure the chromedriver is executable
+        if os.path.exists(driver_path):
+            os.chmod(driver_path, 0o755)
+
         self.driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()), options=chrome_options
+            service=Service(driver_path), options=chrome_options
         )
 
     def scrape_page(self, item_id: str) -> dict | None:
