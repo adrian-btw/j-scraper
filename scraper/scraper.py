@@ -156,22 +156,28 @@ class WebScraper:
             
             return None
 
-    def scrape_multiple(self, item_ids: list[str]) -> list[dict]:
+    def scrape_multiple(self, item_ids: list[str], limit: int | None = None) -> list[dict]:
         """
         Scrapes multiple pages based on their unique IDs.
-        Stops on the first failed game.
+        Stops on the first failed game, if any clues are skipped, or after reaching the limit.
 
         Args:
             item_ids (list[str]): List of unique identifiers.
+            limit (int, optional): Maximum number of items to scrape. Stops after this many successful scrapes.
 
         Returns:
             list[dict]: List of extracted data.
 
         Raises:
-            RuntimeError: If a game fails to scrape (stops iteration).
+            RuntimeError: If a game fails to scrape, has skipped clues, or other errors (stops iteration).
         """
         results = []
         for item_id in item_ids:
+            # Check if we've reached the limit
+            if limit is not None and len(results) >= limit:
+                print(f"Reached limit of {limit} items. Stopping.")
+                break
+            
             result = self.scrape_page(item_id)
             if result is None:
                 raise RuntimeError(
@@ -183,6 +189,14 @@ class WebScraper:
             if result.get("_metadata", {}).get("scrape_failed", False):
                 raise RuntimeError(
                     f"Scraping stopped: game {item_id} failed. "
+                    f"Progress saved for {len(results)} game(s)."
+                )
+            
+            # Check if any clues were skipped (individual clue parsing errors)
+            skipped_clues = result.get("skipped_clues", [])
+            if len(skipped_clues) > 0:
+                raise RuntimeError(
+                    f"Scraping stopped: game {item_id} had {len(skipped_clues)} skipped clue(s). "
                     f"Progress saved for {len(results)} game(s)."
                 )
             

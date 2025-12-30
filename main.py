@@ -83,6 +83,11 @@ def main() -> None:
         help="For JSON files, dot-separated path to the list (e.g., 'game_ids'). "
         "Required when --ids points to a JSON file.",
     )
+    arg_parser.add_argument(
+        "--limit",
+        type=int,
+        help="Optional limit on number of items to scrape. Stops after this many successful scrapes.",
+    )
 
     args = arg_parser.parse_args()
 
@@ -91,7 +96,7 @@ def main() -> None:
 
     try:
         item_ids = load_ids_from_file(args.ids, access_key=args.access_key)
-        scraper.scrape_multiple(item_ids)
+        scraper.scrape_multiple(item_ids, limit=args.limit)
 
     except KeyboardInterrupt:
         print("\nScraping interrupted by user. Progress has been saved.")
