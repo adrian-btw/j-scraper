@@ -119,31 +119,74 @@ class WebScraper:
                 "timestamp": datetime.now().isoformat(),
             }
 
-            # Save the data
+            # Save the data (even if it has errors - partial data is better than nothing)
             self.storage.save_data(item_id, data)
 
-            print(f"Successfully scraped {item_id}")
+            # Check if there were any errors
+            errors = existing_metadata.get("errors", [])
+            if errors:
+                print(f"Scraped {item_id} with {len(errors)} error(s) - check metadata")
+            else:
+                print(f"Successfully scraped {item_id}")
+            
             return data
 
         except Exception as e:
-            print(f"Error scraping {item_id}: {str(e)}")
+            # Save partial data with error information even if parsing completely fails
+            error_message = f"Fatal error during scraping: {str(e)}"
+            print(f"Error scraping {item_id}: {error_message}")
+            
+            # Create minimal data structure with error metadata
+            error_data = {
+                "_metadata": {
+                    "errors": [error_message],
+                    "id": item_id,
+                    "url": url,
+                    "timestamp": datetime.now().isoformat(),
+                    "scrape_failed": True,
+                }
+            }
+            
+            # Try to save the error data
+            try:
+                self.storage.save_data(item_id, error_data)
+                print(f"Saved error metadata for {item_id}")
+            except Exception as save_error:
+                print(f"Failed to save error metadata for {item_id}: {save_error}")
+            
             return None
 
     def scrape_multiple(self, item_ids: list[str]) -> list[dict]:
         """
         Scrapes multiple pages based on their unique IDs.
+        Stops on the first failed game.
 
         Args:
             item_ids (list[str]): List of unique identifiers.
 
         Returns:
             list[dict]: List of extracted data.
+
+        Raises:
+            RuntimeError: If a game fails to scrape (stops iteration).
         """
         results = []
         for item_id in item_ids:
             result = self.scrape_page(item_id)
-            if result:
-                results.append(result)
+            if result is None:
+                raise RuntimeError(
+                    f"Scraping stopped: failed to scrape game {item_id}. "
+                    f"Progress saved for {len(results)} game(s)."
+                )
+            
+            # Check if the scrape was marked as failed
+            if result.get("_metadata", {}).get("scrape_failed", False):
+                raise RuntimeError(
+                    f"Scraping stopped: game {item_id} failed. "
+                    f"Progress saved for {len(results)} game(s)."
+                )
+            
+            results.append(result)
         return results
 
     def close(self) -> None:
