@@ -107,12 +107,13 @@ class WebScraper:
             # Delay to ensure the page loads
             time.sleep(2)
 
-            # Extract data using JeopardyGameParser
+            # Extract data using parser
             data = self.parser.parse()
 
             # Add metadata
+            existing_metadata = data.get("_metadata", {})
             data["_metadata"] = {
-                **data["_metadata"],
+                **existing_metadata,
                 "id": item_id,
                 "url": url,
                 "timestamp": datetime.now().isoformat(),
